@@ -1,13 +1,4 @@
-build/index.js
-build/index.js.map
-build/lib.js
-build/lib.js.map
-build/2021/3.js
-build/2021/3.js.map
-build/2021/4.js
-build/2021/4.js.map
-build/2021/5.js
-build/2021/5.js.map
+build/*
 node_modules/.bin/tsc
 node_modules/.bin/tsc.cmd
 node_modules/.bin/tsc.ps1
