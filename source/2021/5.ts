@@ -525,6 +525,25 @@ const inputStr = `955,125 -> 151,929
 831,782 -> 245,196
 759,813 -> 225,279`;
 
+const testExpected2 = `1.1....11.
+.111...2..
+..2.1.111.
+...1.2.2..
+.112313211
+...1.2....
+..1...1...
+.1.....1..
+1.......1.
+222111....`;
+
+enum DIRECTION {
+    NONE,
+    UP,
+    DOWN,
+    LEFT,
+    RIGHT
+}
+
 class VentMapLine {
     x1: number;
     x2: number;
@@ -538,7 +557,7 @@ class VentMapLine {
         this.x2 = parseInt(x2);
         this.y1 = parseInt(y1);
         this.y2 = parseInt(y2);
-        this.coords = this.generateCoords();
+        this.coords = this.calcCoords();
     }
 
     get start() {
@@ -549,40 +568,79 @@ class VentMapLine {
         return [this.x2, this.y2];
     }
 
-    get isStraightLines() {
-        return this.x1 === this.x2 || this.y1 === this.y2;
+    get isStraightLine() {
+        const [x,y] = this.direction;
+        if(x === DIRECTION.NONE || y === DIRECTION.NONE){
+            return true;
+        }
+        return false;
     }
 
-    private generateCoords(): [number, number][] {
-        if (this.x1 === this.x2) {
-            const y1 = this.y1 < this.y2 ? this.y1 : this.y2;
-            const y2 = this.y1 < this.y2 ? this.y2 : this.y1;
-            return Array.from(Array((y2 - y1) + 1)).map((_, i) => [this.x1, y1 + i]);
-        } else if (this.y1 === this.y2) {
-            const x1 = this.x1 < this.x2 ? this.x1 : this.x2;
-            const x2 = this.x1 < this.x2 ? this.x2 : this.x1;
-            return Array.from(Array((x2 - x1) + 1)).map((_, i) => [x1 + i, this.y1]);
-        }
-        return [];
+    get direction() {
+        const x = this.x2 === this.x1 ? DIRECTION.NONE : this.x2 > this.x1 ? DIRECTION.RIGHT : DIRECTION.LEFT;
+        const y = this.y2 === this.y1 ? DIRECTION.NONE : this.y2 > this.y1 ? DIRECTION.UP : DIRECTION.DOWN;
+        return [x, y];
+    }
+
+    private calcCoords(): [number, number][] {
+        const [dirX, dirY] = this.direction;
+        const numPoints = Math.abs(dirX !== DIRECTION.NONE ? this.x2 - this.x1 : this.y2 - this.y1) + 1;
+
+        return Array.from(Array(numPoints)).map((_,i) => {
+            let x,y;
+
+            switch(dirX){
+                case DIRECTION.NONE:
+                    x = this.x1;
+                    break;
+                case DIRECTION.RIGHT:
+                    x = this.x1 + i;
+                    break;
+                case DIRECTION.LEFT:
+                    x = this.x1 - i;
+                    break;
+            }
+
+            switch(dirY){
+                case DIRECTION.NONE:
+                    y = this.y1;
+                    break;
+                case DIRECTION.UP:
+                    y = this.y1 + i;
+                    break;
+                case DIRECTION.DOWN:
+                    y = this.y1 - i;
+                    break;
+            }
+
+            return [x, y];
+        });
     }
 }
 
 class VentMap extends lib.Grid<number> {
     private lines: VentMapLine[];
     emptySymbol: string;
+    overlapPoints: [number, number][];
 
-    constructor(coords: string, emptySymbol = ".") {
-        const lines = coords.split("\n").map(x => new VentMapLine(x));
+    constructor(coords: string, isDiagonalsEnabled = true, emptySymbol = ".") {
+        const _lines = coords.split("\n").map(x => new VentMapLine(x));
+        const lines = isDiagonalsEnabled ? _lines : _lines.filter(x => x.isStraightLine);
         const [cols, rows] = VentMap.getSize(lines);
         const grid = new Array(rows).fill(0).map(() => new Array(cols).fill(0));
+        const overlapPoints: [number,number][] = [];
         lines.forEach(line =>
             line.coords.forEach(point => {
                 grid[point[1]][point[0]]++;
+                if(grid[point[1]][point[0]] === 2){
+                    overlapPoints.push([point[1],point[0]]);
+                }
             })
         );
         super(grid);
         this.lines = lines;
         this.emptySymbol = emptySymbol;
+        this.overlapPoints = overlapPoints;
     }
 
     static getSize(lines: VentMapLine[]) {
@@ -596,23 +654,6 @@ class VentMap extends lib.Grid<number> {
         return this.lines.map(x => x.coords).flat(1);
     }
 
-    get overlap() {
-        return this.lineCoords.filter((point, i, arr) =>
-            arr.filter((comparePoint, compareI) =>
-                i !== compareI && this.arePointsIdentical(point, comparePoint)).length > 0);
-    }
-
-    get overlapUnique() {
-        return this.overlap.filter((coords, i, arr) =>
-            i === arr.findIndex((compareCoords) =>
-                this.arePointsIdentical(coords, compareCoords)
-            ));
-    }
-
-    private arePointsIdentical(a: [number, number], b: [number, number]) {
-        return a[0] === b[0] && a[1] === b[1];
-    }
-
     pointToString(point: number) {
         if (point > 0) {
             return point.toString();
@@ -621,11 +662,22 @@ class VentMap extends lib.Grid<number> {
     }
 }
 
-const testMap = new VentMap(testStr);
+const testMap = new VentMap(testStr, false);
+console.log(testMap.toString());
 console.log(`Test Grid Output Verification: ${testMap.toString() === testExpected ? "PASS" : "FAIL"}`);
-const testAnswer = testMap.overlapUnique.length
+const testAnswer = testMap.overlapPoints.length
 console.log(`Test Grid Unique Overlap Count: ${testAnswer}`);
 
-const mapA = new VentMap(inputStr);
-const answerA = mapA.overlapUnique.length;
+const mapA = new VentMap(inputStr, false);
+const answerA = mapA.overlapPoints.length;
 console.log(`Answer A Grid Unique Overlap Count: ${answerA}`);
+
+const testMap2 = new VentMap(testStr);
+console.log(testMap2.toString());
+console.log(`Test 2 Grid Output Verification: ${testMap2.toString() === testExpected2 ? "PASS" : "FAIL"}`);
+const testAnswer2 = testMap2.overlapPoints.length
+console.log(`Test 2 Grid Unique Overlap Count: ${testAnswer2}`);
+
+const mapB = new VentMap(inputStr);
+const answerB = mapB.overlapPoints.length;
+console.log(`Answer B Grid Unique Overlap Count: ${answerB}`);
