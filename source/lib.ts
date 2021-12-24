@@ -109,3 +109,121 @@ export class Grid<T = string> {
         return gridStr;
     }
 }
+
+interface IAdventCodeDayProps<T> {
+    day: number
+    inputFormatter: (input: string) => T
+    testAInputString: string
+    testBInputString?: string
+    answerInputString: string
+    testAAnswer: string | number
+    testBAnswer: string | number
+}
+
+type AdventCodeAnswerFunction<T> = (input: T) => string | number
+
+type AdventCodeInputFormatted = string | string[][] | number[] | number[][];
+
+interface IAdventCodeDay<T> extends IAdventCodeDayProps<T> { 
+    testAInput: T
+    testBInput: T
+    answerInput: T
+}
+
+export class AdventCodeDay<T> implements IAdventCodeDay<T> {
+    day: number
+    inputFormatter: (input: string) => T
+    testAInputString: string
+    testBInputString?: string
+    answerInputString: string
+    testAAnswer: string | number
+    testBAnswer: string | number
+    testAInput: T
+    testBInput: T
+    answerInput: T
+
+    constructor({day, inputFormatter, testAInputString, testBInputString, answerInputString, testAAnswer, testBAnswer}: IAdventCodeDayProps<T>){
+        this.day = day;
+        this.inputFormatter = inputFormatter;
+        this.testAInputString = testAInputString;
+        this.testBInputString = testBInputString;
+        this.answerInputString = answerInputString;
+        this.testAInput = inputFormatter(testAInputString);
+        this.testBInput = testBInputString ? inputFormatter(testBInputString) : this.testAInput;
+        this.testAAnswer = testAAnswer;
+        this.testBAnswer = testBAnswer;
+        this.answerInput = inputFormatter(answerInputString);
+    }
+
+    runTestA(f: AdventCodeAnswerFunction<T>){
+        const result = f(this.testAInput);
+        console.log(`Test Answer A: ${result} ${result === this.testAAnswer ? "PASS": "FAIL"}`)
+    }    
+    
+    runTestB(f: AdventCodeAnswerFunction<T>){
+        const result = f(this.testBInput ?? this.testAInput);
+        console.log(`Test Answer B: ${result} ${result === this.testBAnswer ? "PASS": "FAIL"}`)
+    }
+
+    runAnswerA(f: AdventCodeAnswerFunction<T>){
+        const result = f(this.answerInput);
+        console.log(`Answer A: ${result}`)
+    }
+
+    runAnswerB(f: AdventCodeAnswerFunction<T>){
+        const result = f(this.answerInput);
+        console.log(`Answer B: ${result}`)
+    }
+
+    run(testAFunction: AdventCodeAnswerFunction<T>, answerAFunction?: AdventCodeAnswerFunction<T>, 
+        testBFunction?: AdventCodeAnswerFunction<T>, answerBFunction?: AdventCodeAnswerFunction<T>) {
+        console.log(`Advent of Code Day ${this.day}`);
+
+        if(testAFunction){
+            console.log(`Running Test A...`);
+            this.runTestA(testAFunction);
+        }
+
+        if(answerAFunction){
+            console.log(`Running Answer A...`);
+            this.runAnswerA(answerAFunction);
+        }
+
+        if(testBFunction){
+            console.log(`Running Test B...`);
+            this.runTestB(testBFunction);
+        }
+
+        if(answerBFunction){
+            console.log(`Running Answer B...`);
+            this.runAnswerB(answerBFunction);
+        }
+    }
+}
+
+export function generateAdjacentCoordinates(x, y, xBoundary?: number, yBoundary?:number, isDiagonalsIncluded = false, isNegativePlane = false){
+    const diagonals = [
+        [x - 1, y - 1],
+        [x + 1, y - 1],
+        [x + 1, y + 1],
+        [x - 1, y + 1]
+    ]
+
+    const direct = [
+        [x, y - 1],
+        [x + 1, y],
+        [x, y + 1],
+        [x - 1, y]
+    ]
+
+    const adjacent = isDiagonalsIncluded ?  [...diagonals, ...direct] : direct;
+
+    return adjacent.filter(([aX, aY]) => (isNegativePlane || aX >= 0 && aY >= 0) && 
+    (xBoundary === undefined || aX < xBoundary) && (yBoundary === undefined || aY < yBoundary));
+}
+
+export type Coordinates = [number, number];
+
+export function findCoordinatesIndex(x: number, y: number, arr: Coordinates[]){
+    return arr.findIndex(([cX, cY]) => cX === x && cY === y);
+}
