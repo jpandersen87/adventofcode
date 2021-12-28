@@ -110,93 +110,95 @@ export class Grid<T = string> {
     }
 }
 
-interface IAdventCodeDayProps<T> {
-    day: number
-    inputFormatter: (input: string) => T
-    testAInputString: string
-    testBInputString?: string
-    answerInputString: string
-    testAAnswer: string | number
-    testBAnswer: string | number
+export type AdventCodeAnswerFunction = (input: any) => any
+export type AdventCodeInputFormatter = (input: string) => any;
+export type AdventCodeCustomAnswerChecker = (result: any, answer: any) => boolean;
+
+export interface IAdventCodeDayProblemProps {
+    label: string
+    inputString: string
+    inputFormatter: AdventCodeInputFormatter
+    answer?: any
+    customAnswerChecker?: AdventCodeCustomAnswerChecker
 }
 
-type AdventCodeAnswerFunction<T> = (input: T) => string | number
-
-type AdventCodeInputFormatted = string | string[][] | number[] | number[][];
-
-interface IAdventCodeDay<T> extends IAdventCodeDayProps<T> { 
-    testAInput: T
-    testBInput: T
-    answerInput: T
+export interface IAdventCodeDayProblem extends IAdventCodeDayProblemProps {
+    input: any
 }
 
-export class AdventCodeDay<T> implements IAdventCodeDay<T> {
-    day: number
-    inputFormatter: (input: string) => T
-    testAInputString: string
-    testBInputString?: string
-    answerInputString: string
-    testAAnswer: string | number
-    testBAnswer: string | number
-    testAInput: T
-    testBInput: T
-    answerInput: T
+export class AdventCodeDayProblem implements IAdventCodeDayProblem {
+    label: string
+    inputString: string
+    input: any
+    inputFormatter: AdventCodeInputFormatter
+    answer?: any
+    customAnswerChecker?: AdventCodeCustomAnswerChecker
 
-    constructor({day, inputFormatter, testAInputString, testBInputString, answerInputString, testAAnswer, testBAnswer}: IAdventCodeDayProps<T>){
+    constructor({label, inputString, answer, customAnswerChecker, inputFormatter}: IAdventCodeDayProblemProps){
+        this.label = label;
+        this.inputString = inputString;
+        this.answer = answer;
+        this.customAnswerChecker = customAnswerChecker;
+        this.inputFormatter = inputFormatter;
+        this.input = this.inputFormatter(this.inputString);
+    }
+
+    run(f: AdventCodeAnswerFunction){
+        console.log(`Running ${this.label}...`);
+        const result = f(this.input);
+        const isPass = this.answer && this.customAnswerChecker ? this.customAnswerChecker(result, this.answer) : result === this.answer;
+        console.log(result);
+        if(this.answer){
+            if(!isPass){
+                console.log(`FAILED! EXPECTED: \n${this.answer}`)
+            } else {
+                console.log(`PASS!`)
+            }
+        }
+    }
+}
+
+export interface IAdventCodeDayProps {
+    day: number
+    inputFormatter: (input: string) => any
+    problemProps: Omit<IAdventCodeDayProblemProps, "inputFormatter">[];
+}
+
+export interface IAdventCodeDay extends IAdventCodeDayProps {
+    problems: IAdventCodeDayProblem[]
+    problemMap: {
+        [key: string]: IAdventCodeDayProblem
+    }
+}
+
+export type AdventCodeDayRunner = {label: string, f: AdventCodeAnswerFunction};
+
+export class AdventCodeDay implements IAdventCodeDay {
+    day: number
+    inputFormatter: (input: string) => any
+    problemProps: Omit<IAdventCodeDayProblemProps, "inputFormatter">[];
+    problems: AdventCodeDayProblem[];
+    problemMap: { [key: string]: AdventCodeDayProblem; };
+
+    constructor({day, inputFormatter, problemProps}: IAdventCodeDayProps){
         this.day = day;
         this.inputFormatter = inputFormatter;
-        this.testAInputString = testAInputString;
-        this.testBInputString = testBInputString;
-        this.answerInputString = answerInputString;
-        this.testAInput = inputFormatter(testAInputString);
-        this.testBInput = testBInputString ? inputFormatter(testBInputString) : this.testAInput;
-        this.testAAnswer = testAAnswer;
-        this.testBAnswer = testBAnswer;
-        this.answerInput = inputFormatter(answerInputString);
+        this.problemProps = problemProps;
+        this.problems = this.problemProps.map(p => new AdventCodeDayProblem({...p, inputFormatter: this.inputFormatter}));
+        this.problemMap = this.problems.reduce((m, p) => {
+            m[p.label] = p;
+            return m;
+        }, {})
     }
 
-    runTestA(f: AdventCodeAnswerFunction<T>){
-        const result = f(this.testAInput);
-        console.log(`Test Answer A: ${result} ${result === this.testAAnswer ? "PASS": "FAIL"}`)
-    }    
-    
-    runTestB(f: AdventCodeAnswerFunction<T>){
-        const result = f(this.testBInput ?? this.testAInput);
-        console.log(`Test Answer B: ${result} ${result === this.testBAnswer ? "PASS": "FAIL"}`)
+    run(runner: AdventCodeDayRunner){
+        this.problemMap[runner.label]?.run(runner.f);
     }
 
-    runAnswerA(f: AdventCodeAnswerFunction<T>){
-        const result = f(this.answerInput);
-        console.log(`Answer A: ${result}`)
-    }
-
-    runAnswerB(f: AdventCodeAnswerFunction<T>){
-        const result = f(this.answerInput);
-        console.log(`Answer B: ${result}`)
-    }
-
-    run(testAFunction: AdventCodeAnswerFunction<T>, answerAFunction?: AdventCodeAnswerFunction<T>, 
-        testBFunction?: AdventCodeAnswerFunction<T>, answerBFunction?: AdventCodeAnswerFunction<T>) {
+    runAll(runners: AdventCodeDayRunner[]){
         console.log(`Advent of Code Day ${this.day}`);
-
-        if(testAFunction){
-            console.log(`Running Test A...`);
-            this.runTestA(testAFunction);
-        }
-
-        if(answerAFunction){
-            console.log(`Running Answer A...`);
-            this.runAnswerA(answerAFunction);
-        }
-
-        if(testBFunction){
-            console.log(`Running Test B...`);
-            this.runTestB(testBFunction);
-        }
-
-        if(answerBFunction){
-            console.log(`Running Answer B...`);
-            this.runAnswerB(answerBFunction);
+        for(let runner of runners){
+            this.problemMap[runner.label]?.run(runner.f);
         }
     }
 }

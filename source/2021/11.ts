@@ -79,11 +79,26 @@ function b(area: number[][]){
 
 const day = new AdventCodeDay({
     inputFormatter: inputStr => inputStr.split("\n").map(row => row.split("").map(val => parseInt(val))),
-    answerInputString: inputStr,
-    day: 11,
-    testAInputString: testInputStr,
-    testAAnswer: 1656,
-    testBAnswer: 195
+    problemProps: [{
+        label: "Test Answer A",
+        inputString: testInputStr,
+        answer: 1656
+    },{
+        label: "Answer A",
+        inputString: inputStr,
+    }, {
+        label: "Test Answer B",
+        inputString: testInputStr, 
+        answer: 195
+    }, {
+        label: "Answer B",
+        inputString: inputStr,
+    }],
+    day: 11
 });
 
-day.run(a, a, b, b);
+day.runAll([
+    {label:"Test Answer A", f:a},
+    {label:"Answer A", f:a},
+    {label:"Test Answer B", f:b},
+    {label:"Answer B", f:b}]);
