@@ -549,15 +549,17 @@ class VentMapLine {
     x2: number;
     y1: number;
     y2: number;
-    coords: [number, number][];
+    coords: lib.CoordinatesValue[];
+    range: lib.CoordinatesValueRange;
 
-    constructor(line: string) {
-        const [[x1, y1], [x2, y2]] = line.split("->").map(x => x.split(","));
-        this.x1 = parseInt(x1);
-        this.x2 = parseInt(x2);
-        this.y1 = parseInt(y1);
-        this.y2 = parseInt(y2);
+    constructor(range: lib.CoordinatesValueRange) {
+        const [[x1, y1], [x2, y2]] = range;
+        this.x1 = x1;
+        this.x2 = x2;
+        this.y1 = y1;
+        this.y2 = y2;
         this.coords = this.calcCoords();
+        this.range = range;
     }
 
     get start() {
@@ -582,7 +584,7 @@ class VentMapLine {
         return [x, y];
     }
 
-    private calcCoords(): [number, number][] {
+    private calcCoords(): lib.CoordinatesValue[] {
         const [dirX, dirY] = this.direction;
         const numPoints = Math.abs(dirX !== DIRECTION.NONE ? this.x2 - this.x1 : this.y2 - this.y1) + 1;
 
@@ -618,66 +620,101 @@ class VentMapLine {
     }
 }
 
-class VentMap extends lib.Grid<number> {
+export interface VentGridHistoryRecord extends lib.CoordinateGridHistoryRecord {
+    history: VentGridHistoryRecord[],
+    lines: VentMapLine[]
+}
+
+class VentGrid extends lib.CoordinateGrid {
     private lines: VentMapLine[];
-    emptySymbol: string;
-    overlapPoints: [number, number][];
+    history: VentGridHistoryRecord[]
 
-    constructor(coords: string, isDiagonalsEnabled = true, emptySymbol = ".") {
-        const _lines = coords.split("\n").map(x => new VentMapLine(x));
-        const lines = isDiagonalsEnabled ? _lines : _lines.filter(x => x.isStraightLine);
-        const [cols, rows] = VentMap.getSize(lines);
-        const grid = new Array(rows).fill(0).map(() => new Array(cols).fill(0));
-        const overlapPoints: [number,number][] = [];
-        lines.forEach(line =>
-            line.coords.forEach(point => {
-                grid[point[1]][point[0]]++;
-                if(grid[point[1]][point[0]] === 2){
-                    overlapPoints.push([point[1],point[0]]);
-                }
-            })
-        );
-        super(grid);
+    constructor(lines: VentMapLine[], spacer = "", xMax?: number, yMax?: number, defaultValue = "#", defaultEmptyValue = ".", isNegativePlane = false, history?: VentGridHistoryRecord[]){
+        const coords = VentGrid.getLinePoints(lines);
+        super(coords, spacer, xMax, yMax, defaultValue, defaultEmptyValue, isNegativePlane);
         this.lines = lines;
-        this.emptySymbol = emptySymbol;
-        this.overlapPoints = overlapPoints;
+        this.history = history ?? [];
     }
 
-    static getSize(lines: VentMapLine[]) {
-        const numCols = Math.max(...lines.map(x => Math.max(x.start[0], x.end[0]))) + 1;
-        const numRows = Math.max(...lines.map(x => Math.max(x.start[1], x.end[1]))) + 1;
-
-        return [numCols, numRows];
+    getHistory(historyI?:number): VentGridHistoryRecord {
+        return super.getHistory(historyI);
     }
 
-    get lineCoords() {
-        return this.lines.map(x => x.coords).flat(1);
+    saveState(){
+        this.history.push({
+            points: this.points,
+            history: this.history,
+            xMax: this.xMax,
+            yMax: this.yMax,
+            lines: this.lines
+        });
     }
 
-    pointToString(point: number) {
-        if (point > 0) {
-            return point.toString();
+    getGridInHistory(historyI?: number){
+        if(historyI !== undefined){
+            const {xMax, yMax, history, lines} = this.getHistory(historyI);
+            return new VentGrid(lines, this.spacer, xMax, yMax, this.defaultValue, this.defaultEmptyValue, this.isNegativePlane, history);
         }
-        return this.emptySymbol;
+
+        return this;
+    }
+
+    getPointValue(point: lib.CoordinatesValue){
+        return this.getPoints(point[0], point[1])?.length;
+    }
+
+    static getLinePoints(lines){
+        return lines.map(l => l.coords).flat(1);
     }
 }
 
-const testMap = new VentMap(testStr, false);
-console.log(testMap.toString());
-console.log(`Test Grid Output Verification: ${testMap.toString() === testExpected ? "PASS" : "FAIL"}`);
-const testAnswer = testMap.overlapPoints.length
-console.log(`Test Grid Unique Overlap Count: ${testAnswer}`);
+function runA(lines: VentMapLine[]) {
+    return new VentGrid(lines.filter(l => l.isStraightLine));
+}
 
-const mapA = new VentMap(inputStr, false);
-const answerA = mapA.overlapPoints.length;
-console.log(`Answer A Grid Unique Overlap Count: ${answerA}`);
+function runB(lines: VentMapLine[]){
+    return new VentGrid(lines);
+}
 
-const testMap2 = new VentMap(testStr);
-console.log(testMap2.toString());
-console.log(`Test 2 Grid Output Verification: ${testMap2.toString() === testExpected2 ? "PASS" : "FAIL"}`);
-const testAnswer2 = testMap2.overlapPoints.length
-console.log(`Test 2 Grid Unique Overlap Count: ${testAnswer2}`);
+const t = (map: VentGrid) => {
+    return map.toVisualString();
+};
 
-const mapB = new VentMap(inputStr);
-const answerB = mapB.overlapPoints.length;
-console.log(`Answer B Grid Unique Overlap Count: ${answerB}`);
+const a = (map: VentGrid) => {
+    return map.getOverlapPoints().length;
+};
+
+const tA = lib.attachFunction(runA, t);
+const tB = lib.attachFunction(runB, t);
+const aA = lib.attachFunction(runA, a);
+const aB = lib.attachFunction(runB, a);
+
+const day = new lib.AdventCodeDay({
+    day: 5,
+    inputFormatter: (input: string) => {
+        const lines: lib.CoordinatesValueRange[] = input.split("\n").map(x => x.split(" -> ").map(y => y.split(",").map(z => parseInt(z)))) as lib.CoordinatesValueRange[]
+        return lines.map(x => new VentMapLine(x));
+    },
+    problemProps: [{
+        label: "Test Answer A",
+        inputString: testStr,
+        answer: testExpected,
+    },{
+        label: "Answer A",
+        inputString: inputStr
+    },{
+        label: "Test Answer B",
+        inputString: testStr,
+        answer: testExpected2,
+    },{
+        label: "Answer B",
+        inputString: inputStr
+    },]
+});
+
+day.runAll([
+    {label: "Test Answer A", f: tA},
+    {label: "Answer A", f: aA},
+    {label: "Test Answer B", f: tB},
+    {label: "Answer B", f: aB},
+])

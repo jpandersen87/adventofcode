@@ -1,4 +1,4 @@
-import { AdventCodeDay, Coordinates } from "../lib";
+import { AdventCodeDay, Coordinates, CoordinateGrid, CoordinateAxis, attachFunction } from "../lib";
 
 const testInputStr = `6,10
 0,14
@@ -835,79 +835,6 @@ fold along y=27
 fold along y=13
 fold along y=6`;
 
-class CoordinatePaper {
-    history: Coordinates[][]
-    coordinates: Coordinates[]
-    folds: [string, number][]
-    xMax: number
-    yMax: number
-
-    constructor(coordinates: Coordinates[], folds: [string, number][]){
-        this.history = [coordinates];
-        this.coordinates = coordinates;
-        this.folds = folds;
-        this.xMax = this.coordinates.reduce((p, c) => c[0] > p ? c[0] : p, 0);
-        this.yMax = this.coordinates.reduce((p, c) => c[1] > p ? c[1] : p, 0);
-
-        this.folds.forEach(([axis, num]) => {
-            if(axis === "x"){
-                this.foldX(num);
-            } else {
-                this.foldY(num);
-            }
-        })
-    }
-
-    getUniqueCoordinates(historyI?: number){
-        if(historyI === undefined){
-            return this.coordinates.filter((c,i,arr) => arr.findIndex(a => a[0] === c[0] && a[1] === c[1]) === i);
-        }
-        return this.history[historyI].filter((c,i,arr) => arr.findIndex(a => a[0] === c[0] && a[1] === c[1]) === i);
-    }
-
-    toVisualString(){
-        const lines: string[][] = [];
-
-        for(let yI = 0; yI <= this.yMax; yI++){
-            const line: string[] = [];
-
-            for(let xI = 0; xI <= this.xMax; xI++){
-                if(this.coordinates.find(([x,y]) => x === xI && y === yI)){
-                    line.push("#");
-                } else {
-                    line.push(".");
-                }
-            }
-
-            lines.push(line);
-        }
-
-        return lines.map(x => x.join("")).join("\n");
-    }
-
-    foldX(fX: number){
-        this.coordinates = this.coordinates.map(([x,y]) => {
-            if(x > fX){
-                return [Math.abs(x - (fX * 2)), y];
-            }
-            return [x,y];
-        });
-        this.history.push(this.coordinates);
-        this.xMax = this.xMax - (fX + 1);
-    }
-
-    foldY(fY: number){
-        this.coordinates = this.coordinates.map(([x,y]) => {
-            if(y > fY){
-                return [x, Math.abs(y - (fY * 2))];
-            }
-            return [x,y];
-        });
-        this.history.push(this.coordinates);
-        this.yMax = this.yMax - (fY + 1);
-    }
-}
-
 function inputFormatter(input: string){
     const [coordsString, foldString] = input.split("\n\n");
     const coordinates = coordsString.split("\n").map(cs => cs.split(",").map(x => parseInt(x)));
@@ -922,15 +849,22 @@ function inputFormatter(input: string){
     return [coordinates, folds];
 }
 
-function tA([coordinates, folds]: [Coordinates[], [string, number][]]){
-    const paper = new CoordinatePaper(coordinates, folds);
-    return paper.getUniqueCoordinates(1).length;
+function run([coordinates, folds]: [Coordinates[], [CoordinateAxis, number][]]){
+    const grid = new CoordinateGrid(coordinates);
+    for(let [axis, coordinate] of folds){
+        grid.foldAxis(axis, coordinate);
+    }
+    return grid;
 }
 
-function b([coordinates, folds]: [Coordinates[], [string, number][]]){
-    const paper = new CoordinatePaper(coordinates, folds);
-    return paper.toVisualString()
-}
+const a = attachFunction(run, (grid: CoordinateGrid) => {
+    const pastGrid = grid.getGridInHistory(1);
+    return pastGrid.getUniquePoints().length;
+});
+
+const b = attachFunction(run, (grid: CoordinateGrid) => {
+    return grid.toVisualString()
+});
 
 const day = new AdventCodeDay({
     day: 13,
@@ -949,7 +883,7 @@ const day = new AdventCodeDay({
 });
 
 day.runAll([
-    {label: "Test Answer A", f: tA},
-    {label: "Answer A", f: tA},
+    {label: "Test Answer A", f: a},
+    {label: "Answer A", f: a},
     {label: "Answer B", f: b}
 ]);

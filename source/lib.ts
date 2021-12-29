@@ -76,37 +76,170 @@ export function getCols(input: string[][]): string[][] {
     });
 }
 
-export class Grid<T = string> {
-    grid: T[][];
-    spacer: string;
+export type CoordinatesValue = [number, number, any?];
+export type CoordinatesValueRange = [CoordinatesValue, CoordinatesValue]
+export enum CoordinateAxis {
+    X = "x",
+    Y = "y"
+}
 
-    constructor(grid: T[][], spacer = ""){
-        this.grid = grid;
+export interface CoordinateGridHistoryRecord {
+    history: CoordinateGridHistoryRecord[]
+    points: CoordinatesValue[]
+    xMax: number
+    yMax: number
+}
+
+export class CoordinateGrid {
+    points: CoordinatesValue[]
+    history: CoordinateGridHistoryRecord[]
+    spacer: string
+    xMax: number
+    yMax: number
+    defaultValue: string
+    defaultEmptyValue: string
+    isNegativePlane: boolean
+
+    constructor(coordinates: CoordinatesValue[], spacer = "", xMax?: number, yMax?: number, defaultValue = "#", defaultEmptyValue = ".", isNegativePlane = false, history?: CoordinateGridHistoryRecord[]){
+        this.points = coordinates;
         this.spacer = spacer;
-    }    
+        this.xMax = xMax ?? this.getMax(CoordinateAxis.X);
+        this.yMax = yMax ?? this.getMax(CoordinateAxis.Y);
+        this.defaultValue = defaultValue;
+        this.defaultEmptyValue = defaultEmptyValue;
+        this.isNegativePlane = isNegativePlane;
+        this.history = [];
+        this.saveState();
+    }
+
+    getMax(axis:CoordinateAxis){
+        const i = axis === CoordinateAxis.X ? 0 : 1;
+        return this.points.reduce((p, c) => c[i] > p ? c[i] : p, 0);
+    }
+
+    saveState(){
+        this.history.push({
+            points: this.points,
+            history: this.history,
+            xMax: this.xMax,
+            yMax: this.yMax
+        });
+    }
     
-    toString() {
-        return this.grid
-            .map(row => row.map(point => this.pointToString(point)).join(""))
-            .join("\n");
+    getHistory(historyI = this.history.length - 1): any{
+        return this.history[historyI];
     }
 
-    pointToString(point: T): string{
-        if(typeof(point) === "string"){
-            return point;
+    getGridInHistory(historyI?: number){
+        if(historyI !== undefined){
+            const {points, xMax, yMax, history} = this.getHistory(historyI);
+            return new CoordinateGrid(points, this.spacer, xMax, yMax, this.defaultValue, this.defaultEmptyValue, this.isNegativePlane, history);
         }
-        throw new Error("Not implemented");
+
+        return this;
+    }
+    
+    toVisualString() {
+        const lines: string[][] = [];
+
+        for(let yI = 0; yI < this.yMax + 1; yI++){
+            const line: string[] = [];
+            for(let xI = 0; xI < this.xMax + 1; xI++){
+                const match = this.getUniquePoints(xI, yI);
+                if(match){
+                    line.push(this.getPointValue(match) ?? this.defaultValue)
+                } else {
+                    line.push(".");
+                }
+            }
+            lines.push(line);
+        }
+
+        return lines.map(l => l.join("")).join("\n");
     }
 
-    static fromString(gridStr: string, spacer = ""){
-        const rows = gridStr.split("\n");
-        const grid = rows.map(x => x.trim().split(spacer));
-        return new Grid<string>(grid, spacer);
+    getPointValue(point: CoordinatesValue){
+        return point[2];
+    }
+    
+    calcAdjacentCoordinates(x, y, isDiagonalsIncluded = false){
+        const xBoundary = this.xMax, yBoundary = this.yMax
+        return generateAdjacentCoordinates(x, y, xBoundary, yBoundary, isDiagonalsIncluded, this.isNegativePlane)
     }
 
-    static createGridString(rows: string[][], spacer = ""){
-        const gridStr = rows.map(row => row.join(spacer)).join("\n");
-        return gridStr;
+    getAdjacentPoints(x, y, isDiagonalsIncluded = false){
+        const possible = this.calcAdjacentCoordinates(x, y, isDiagonalsIncluded);
+        return this.points.filter(c => possible.find(p => CoordinateGrid.getIsCoordinatesPairEqual(c,p)));
+    }
+
+    foldAxis(axis: CoordinateAxis, f: number){
+        const i = axis === CoordinateAxis.X ? 0 : 1;
+        this.points = this.points.map(c => {
+            if(c[i] > f){
+                const newCoordinate = Math.abs(c[i] - (f * 2));
+                if(axis === CoordinateAxis.X){
+                    return [newCoordinate, c[1], c[2]]
+                }
+                return [c[0], newCoordinate, c[2]];
+            }
+            return c;
+        });
+        if(axis === CoordinateAxis.X){
+            this.xMax = this.xMax - (f + 1);
+        } else {
+            this.yMax = this.yMax - (f + 1);
+        }
+        this.saveState();
+    }
+
+    getPoints(x?: number, y?: number, value?: any){
+        if(x !== undefined || y !== undefined || value !== undefined){
+            return this.points.filter(([cX,cY,cV]) => {
+                const isX = x !== undefined ? cX === x : true;
+                const isY = y !== undefined ? cY === y : true;
+                const isV = value ? cV === value : true;
+
+                return isX && isY && isV;
+            });
+        }
+        return this.points;
+    }
+
+    getPoint(x: number, y:number, value?: any){
+        return this.getPoints(x,y,value)[0];
+    }
+
+    getUniquePoints(x: number, y: number): CoordinatesValue | undefined
+    getUniquePoints(x?: number, y?: number): CoordinatesValue[]
+    getUniquePoints(x?: number, y?: number): unknown {
+        const matches = this.getPoints(x,y).filter((c,i,arr) => arr.findIndex(a => CoordinateGrid.getIsCoordinatesPairEqual(c,a)) === i);
+        if(x !== undefined && y !== undefined){
+            return matches[0];
+        }
+        return matches;
+    }
+
+    getOverlapPoints(x?: number, y?: number){
+        return this.getPoints(x, y).filter((c, i, arr) => arr.findIndex((a,aI) => aI !== i && CoordinateGrid.getIsCoordinatesPairEqual(c,a)))
+    }
+
+    static getIsCoordinatesPairEqual(a: CoordinatesValue, b: CoordinatesValue, isValue = true){
+        return a[0] === b[0] && a[1] === b[1] && (!isValue || a[2] === b[2]);
+    }
+
+    removePoint(point: CoordinatesValue, isSave = true){
+        const removeI = this.points.findIndex(a => CoordinateGrid.getIsCoordinatesPairEqual(point, a));
+        this.points = this.points.filter((_,i) => i !== removeI);
+        if(isSave){
+            this.saveState();
+        }
+    }
+
+    addPoint(point: CoordinatesValue, isSave = true){
+        this.points.push(point);
+        if(isSave){
+            this.saveState();
+        }
     }
 }
 
@@ -203,15 +336,15 @@ export class AdventCodeDay implements IAdventCodeDay {
     }
 }
 
-export function generateAdjacentCoordinates(x, y, xBoundary?: number, yBoundary?:number, isDiagonalsIncluded = false, isNegativePlane = false){
-    const diagonals = [
+export function generateAdjacentCoordinates(x, y, xBoundary?: number, yBoundary?:number, isDiagonalsIncluded = false, isNegativePlane = false): Coordinates[]{
+    const diagonals: Coordinates[] = [
         [x - 1, y - 1],
         [x + 1, y - 1],
         [x + 1, y + 1],
         [x - 1, y + 1]
     ]
 
-    const direct = [
+    const direct: Coordinates[] = [
         [x, y - 1],
         [x + 1, y],
         [x, y + 1],
@@ -228,4 +361,8 @@ export type Coordinates = [number, number];
 
 export function findCoordinatesIndex(x: number, y: number, arr: Coordinates[]){
     return arr.findIndex(([cX, cY]) => cX === x && cY === y);
+}
+
+export function attachFunction(f: Function, target: Function){
+    return (...params) => target(f(...params));
 }
