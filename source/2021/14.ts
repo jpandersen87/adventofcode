@@ -127,8 +127,12 @@ type InsertionRule = [string, string];
 interface TemplatePairMetadata {
     [key: string]: number
 }
+type CompressedPolymer = number[];
+type CompressedPolymerMap = {
+    [key: string]: number
+}
 
-function step(count: number, template: Template, insertionRules: InsertionRule[]){
+function badWayButIsFast(count: number, template: Template, insertionRules: InsertionRule[]){
     const pairMap = calcPolymerPairCountMap(template);
     const countMap = calcPolymerCountMap(template);
 
@@ -148,6 +152,59 @@ function step(count: number, template: Template, insertionRules: InsertionRule[]
     }
 
     return [pairMap, countMap];
+}
+
+function calcCompressedPolymer(count: number, template: Template, insertionRules: InsertionRule[]){
+    const parts = insertionRules.reduce((p, [pair, add]) => {
+        const parts: string[] = [...Array.from(pair), add];
+        for(let part of parts){
+            if(!p.includes(part)){
+                p.push(part);
+            }
+        }
+        return p;
+    }, [] as string[]);
+
+    for(let part of Array.from(template)){
+        if(!parts.includes(part)){
+            parts.push(part);
+        }
+    }
+
+    let pairMapI = 0;
+    const pairMap = parts.reduce((p, c) => {
+        for(let otherPart of parts){
+            p[c+otherPart] = p[c+otherPart] ?? pairMapI++;
+            p[otherPart+c] = p[otherPart+c] ?? pairMapI++;
+        }
+        return p;
+    }, {} as {[key:string]: number});
+    const compressedPolymer = Array.from(template).reduce((p, c, i) => {
+        if(i > 0){
+            p.push(pairMap[template[i-1]+c]);
+        }
+        return p;
+    }, [] as CompressedPolymer)
+
+    for(let _ = 0; _ < count; _++){
+        let i = 0, endI = compressedPolymer.length;
+
+        while(i < endI){
+            const id = compressedPolymer[i];
+            for(let [pair, add] of insertionRules){
+                if(id === pairMap[pair]){
+                    const pairLeft = pairMap[pair[0]+add];
+                    const pairRight = pairMap[add+pair[1]];
+
+                    compressedPolymer.splice(i, 1, pairLeft, pairRight);
+                    i = i + 2;
+                    endI = endI + 1;
+                }
+            }
+        }
+    }
+
+    return [pairMap, compressedPolymer] as [CompressedPolymerMap, CompressedPolymer];
 }
 
 function calcPolymerPairCountMap(polymer: string): TemplatePairMetadata{
@@ -183,15 +240,37 @@ function calcPolymerCountMap(polymer: string){
     }, {})
 }
 
+function uncompressPolymer(map: CompressedPolymerMap, compressedPolymer: CompressedPolymer){
+    const reverseMap = Object.fromEntries(Object.entries(map).map(([k, v]) => [v, k]));
+    return compressedPolymer.reduce((p, c, i) => {
+        p += reverseMap[c][0];
+        if(i === compressedPolymer.length - 1) {
+            p += reverseMap[c][1];
+        }
+        return p;
+    },"")
+}
+
+function calcCompressedPolymerCounts(map: CompressedPolymerMap, compressedPolymer: CompressedPolymer){
+    const reverseMap = Object.fromEntries(Object.entries(map).map(([k, v]) => [v, k]));
+    return compressedPolymer.reduce((p, c, i) => {
+        p[reverseMap[c][0]] = (p[reverseMap[c][0]] ?? 0) + 1;
+        if(i === compressedPolymer.length - 1) {
+            p[reverseMap[c][1]] = (p[reverseMap[c][1]] ?? 0) + 1;
+        }
+        return p;
+    }, {})
+}
+
 function a([template, insertionRules]: [Template, InsertionRule[]]){
-    const [pairMap, countMap] = step(10, template, insertionRules);
+    const [pairMap, countMap] = badWayButIsFast(10, template, insertionRules);
     const [least, most] = getMostLeast(countMap);
 
     return most - least;
 }
 
 function b([template, insertionRules]: [Template, InsertionRule[]]){
-    const [pairMap, countMap] = step(40, template, insertionRules);
+    const [pairMap, countMap] = badWayButIsFast(40, template, insertionRules);
     const [least, most] = getMostLeast(countMap);
 
     return most - least;
