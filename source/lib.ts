@@ -1,3 +1,5 @@
+import path from "path/posix";
+
 export const DOUBLE_NEWLINE = /\n\s?\n/;
 
 export function getMostAndLeastCommonChar(input: string[], leastTieChar?: string, mostTieChar?: string): [string, string] {
@@ -163,13 +165,13 @@ export class CoordinateGrid {
     }
     
     calcAdjacentCoordinates(x, y, isDiagonalsIncluded = false){
-        const xBoundary = this.xMax, yBoundary = this.yMax
+        const xBoundary = this.xMax + 1, yBoundary = this.yMax + 1
         return generateAdjacentCoordinates(x, y, xBoundary, yBoundary, isDiagonalsIncluded, this.isNegativePlane)
     }
 
     getAdjacentPoints(x, y, isDiagonalsIncluded = false){
         const possible = this.calcAdjacentCoordinates(x, y, isDiagonalsIncluded);
-        return this.points.filter(c => possible.find(p => CoordinateGrid.getIsCoordinatesPairEqual(c,p)));
+        return this.points.filter(c => possible.find(p => CoordinateGrid.getIsCoordinatesPairEqual(c,p, false)));
     }
 
     foldAxis(axis: CoordinateAxis, f: number){
@@ -217,6 +219,22 @@ export class CoordinateGrid {
             return matches[0];
         }
         return matches;
+    }
+
+    getPointRange(start: number, end:number, axis: CoordinateAxis, otherCoordinate: number){
+        const points: CoordinatesValue[] = [];
+
+        for(let i = start; i < end; i++){
+            const axisI = axis === CoordinateAxis.X ? 0 : 1;
+            const otherAxisI = axisI === 1 ? 0 : 1;
+            const point = this.points.find(p => p[axisI] === i && p[otherAxisI] === otherCoordinate);
+
+            if(point){
+                points.push(point);
+            }
+        }
+
+        return points;
     }
 
     getOverlapPoints(x?: number, y?: number){
@@ -276,9 +294,9 @@ export class AdventCodeDayProblem implements IAdventCodeDayProblem {
         this.input = this.inputFormatter(this.inputString);
     }
 
-    run(f: AdventCodeAnswerFunction){
+    async run(f: AdventCodeAnswerFunction){
         console.log(`Running ${this.label}...`);
-        const result = f(this.input);
+        const result = await Promise.resolve(f(this.input));
         const isPass = this.answer && this.customAnswerChecker ? this.customAnswerChecker(result, this.answer) : result === this.answer;
         console.log(result);
         if(this.answer){
@@ -328,10 +346,10 @@ export class AdventCodeDay implements IAdventCodeDay {
         this.problemMap[runner.label]?.run(runner.f);
     }
 
-    runAll(runners: AdventCodeDayRunner[]){
+    async runAll(runners: AdventCodeDayRunner[]){
         console.log(`Advent of Code Day ${this.day}`);
         for(let runner of runners){
-            this.problemMap[runner.label]?.run(runner.f);
+            await this.problemMap[runner.label]?.run(runner.f)
         }
     }
 }
